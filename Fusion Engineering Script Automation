@@ -1,0 +1,60 @@
+import adsk.core, adsk.fusion, adsk.cam, traceback
+
+def run(context):
+    ui = None
+    try:
+        app = adsk.core.Application.get()
+        ui = app.userInterface
+        design = app.activeProduct
+        rootComp = design.rootComponent
+
+        # =====================
+        # 1. Add User Parameters
+        # =====================
+        params = design.userParameters
+        lengthParam = params.add('Length', adsk.core.ValueInput.createByReal(10), 'cm', 'Length of rectangle')
+        widthParam  = params.add('Width', adsk.core.ValueInput.createByReal(5), 'cm', 'Width of rectangle')
+        heightParam = params.add('Height', adsk.core.ValueInput.createByReal(2), 'cm', 'Extrusion height')
+        filletParam = params.add('FilletRadius', adsk.core.ValueInput.createByReal(0.5), 'cm', 'Edge fillet radius')
+
+        # =====================
+        # 2. Create Sketch
+        # =====================
+        sketches = rootComp.sketches
+        xyPlane = rootComp.xYConstructionPlane
+        sketch = sketches.add(xyPlane)
+        lines = sketch.sketchCurves.sketchLines
+
+        # Rectangle using parameters
+        lines.addTwoPointRectangle(
+            adsk.core.Point3D.create(0,0,0),
+            adsk.core.Point3D.create(lengthParam.value, widthParam.value, 0)
+        )
+
+        # =====================
+        # 3. Extrude the Sketch
+        # =====================
+        prof = sketch.profiles.item(0)
+        extrudes = rootComp.features.extrudeFeatures
+        distance = adsk.core.ValueInput.createByReal(heightParam.value)
+        extrude = extrudes.addSimple(prof, distance, adsk.fusion.FeatureOperations.NewBodyFeatureOperation)
+        body = extrude.bodies.item(0)
+
+        # =====================
+        # 4. Apply Fillet
+        # =====================
+        edges = adsk.core.ObjectCollection.create()
+        for edge in body.edges:
+            edges.add(edge)
+
+        fillets = rootComp.features.filletFeatures
+        filletInput = fillets.createInput()
+        filletInput.addConstantRadiusEdgeSet(edges, adsk.core.ValueInput.createByReal(filletParam.value), True)
+        fillets.add(filletInput)
+
+        ui.messageBox('Parametric block created successfully!')
+
+    except:
+        if ui:
+            ui.messageBox('Failed:\n{}'.format(traceback.format_exc()))
+
